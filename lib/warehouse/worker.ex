@@ -1,28 +1,38 @@
 defmodule Warehouse.Worker do
-  use GenServer
-
   require Logger
 
-  def start_link(args) do
-    GenServer.start_link(__MODULE__, args)
+  def work(jobs) do
+    Logger.info fn -> "Worker #{inspect self()} starting." end
+
+
+    jobs
+    |> Enum.map(&handle_task/1)
+    |> Task.yield_many(:timer.seconds(20))
+    |> process_results()
+  end
+  
+  defp handle_task(%{id: job_id}) do
+    Task.async(__MODULE__, :do_work, [job_id])
   end
 
-  def start_link([], {args}) do
-    start_link({args})
+  def do_work(job_id) do
+    seconds = Enum.random(1..10)
+    Process.sleep(:timer.seconds(seconds)) # asyncronous
+    job_id
   end
 
-  def init(state) do
-    schedule_work()
-    {:ok, state}
+  defp process_results(tasks) do
+    tasks
+    |> Enum.map(&maybe_get_response/1)
+    |> Enum.map(&complete_task/1)
   end
 
-  def handle_info(:work, state) do
-    Logger.debug fn -> "Warehouse.Worker #{inspect self()} working..." end
-    schedule_work()
-    {:noreply, state}
+  defp maybe_get_response({task, response}) do
+    # Shutdown the tasks that did not reply nor exit
+    response || Task.shutdown(task, :brutal_kill)
   end
 
-  defp schedule_work() do
-    Process.send_after(self(), :work, 10_000) # 10 seconds
+  defp complete_task({:ok, response}) do
+    Logger.info fn -> "Worker #{inspect self()} completed job: #{response}." end
   end
 end

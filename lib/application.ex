@@ -1,6 +1,6 @@
 defmodule Warehouse.Application do
   use Application
-  
+
   def start(_type, _args) do
     children = [
       {Warehouse.Manager, []}
